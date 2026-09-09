@@ -10,6 +10,7 @@ permissions:
 jobs:
   lint:
     name: Lint and prepare release comparison
+    if: github.event.release.prerelease == false
     runs-on: ubuntu-latest
     outputs:
       previous_tag: ${{ steps.release_tags.outputs.previous_tag }}
@@ -71,7 +72,7 @@ jobs:
           echo "compare_url=$compare_url" >> "$GITHUB_OUTPUT"
 
   approval:
-    name: Approve production deployment
+    name: Verify code was reviewed
     needs: lint
     runs-on: ubuntu-latest
     environment:
