@@ -2,7 +2,7 @@ name: Release deployment demo
 
 on:
   release:
-    types: [published]
+    types: [released]
 
 permissions:
   contents: read
@@ -10,7 +10,6 @@ permissions:
 jobs:
   lint:
     name: Lint and prepare release comparison
-    if: github.event.release.prerelease == false
     runs-on: ubuntu-latest
     outputs:
       previous_tag: ${{ steps.release_tags.outputs.previous_tag }}
