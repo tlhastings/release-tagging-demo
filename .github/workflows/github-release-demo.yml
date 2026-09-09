@@ -1,0 +1,92 @@
+name: Release deployment demo
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint and prepare release comparison
+    runs-on: ubuntu-latest
+    outputs:
+      previous_tag: ${{ steps.release_tags.outputs.previous_tag }}
+      compare_url: ${{ steps.release_tags.outputs.compare_url }}
+
+    steps:
+      - name: Check out repository and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Lint
+        run: sleep 10
+
+      - name: Find previous semantic-version tag
+        id: release_tags
+        shell: bash
+        env:
+          CURRENT_TAG: ${{ github.event.release.tag_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$CURRENT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag '$CURRENT_TAG' does not match vMAJOR.MINOR.PATCH." >&2
+            exit 1
+          fi
+
+          mapfile -t version_tags < <(
+            git tag --list |
+              grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' |
+              sort -V
+          )
+
+          current_index=-1
+          for i in "${!version_tags[@]}"; do
+            if [[ "${version_tags[$i]}" == "$CURRENT_TAG" ]]; then
+              current_index=$i
+              break
+            fi
+          done
+
+          if (( current_index < 0 )); then
+            echo "Release tag '$CURRENT_TAG' was not found in the repository tags." >&2
+            exit 1
+          fi
+
+          if (( current_index == 0 )); then
+            echo "Release tag '$CURRENT_TAG' has no earlier semantic-version tag." >&2
+            exit 1
+          fi
+
+          previous_tag="${version_tags[$((current_index - 1))]}"
+          compare_url="https://github.com/${REPOSITORY}/compare/${previous_tag}...${CURRENT_TAG}"
+
+          echo "Previous tag: $previous_tag"
+          echo "Comparison: $compare_url"
+          echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
+          echo "compare_url=$compare_url" >> "$GITHUB_OUTPUT"
+
+  approval:
+    name: Approve production deployment
+    needs: lint
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ needs.lint.outputs.compare_url }}
+
+    steps:
+      - name: Record approval
+        run: echo 'Production deployment approved.'
+
+  deploy:
+    name: Deploy to production
+    needs: approval
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy
+        run: sleep 10
